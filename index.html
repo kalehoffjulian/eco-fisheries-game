@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eco-Fisheries: Tragedy of the Commons</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #050b14;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 1000px;
+            height: 600px;
+            border: 4px solid #00f0ff;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+            background: #081b33;
+        }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px 15px;
+            background: rgba(5, 11, 20, 0.85);
+            border-bottom: 2px solid #00f0ff;
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+            z-index: 10;
+        }
+        .p1-color { color: #ff3366; }
+        .p2-color { color: #33ccff; }
+        #event-banner {
+            position: absolute;
+            top: 50px;
+            right: 15px;
+            background: #ffcc00;
+            color: #000;
+            padding: 6px 12px;
+            font-weight: bold;
+            font-size: 12px;
+            border-radius: 4px;
+            display: none;
+            z-index: 10;
+        }
+        #modal {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.92);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            text-align: center;
+            padding: 25px;
+        }
+        #modal h1 { font-size: 26px; margin-bottom: 8px; color: #ffcc00; text-transform: uppercase; }
+        #modal h3 { font-size: 15px; margin-bottom: 12px; color: #00f0ff; text-transform: uppercase; letter-spacing: 1px; }
+        #modal p { font-size: 13px; line-height: 1.5; margin-bottom: 8px; max-width: 750px; }
+        .reaction-tag {
+            font-size: 16px;
+            font-weight: bold;
+            color: #ff3366;
+            background: rgba(255, 51, 102, 0.15);
+            border: 1px dashed #ff3366;
+            padding: 6px 12px;
+            margin: 6px 0;
+            display: inline-block;
+            border-radius: 4px;
+        }
+        .paradox-box {
+            background: rgba(255, 204, 0, 0.1);
+            border: 1px solid #ffcc00;
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: #ffcc00;
+            font-size: 12px;
+            text-align: left;
+        }
+        .stats-grid {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 680px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: left;
+            font-size: 12px;
+        }
+        .audit-box {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid #00f0ff;
+            padding: 12px;
+            margin-top: 8px;
+            border-radius: 6px;
+            max-width: 680px;
+            text-align: left;
+            font-size: 12px;
+            color: #e0e0e0;
+        }
+        #modal button {
+            margin-top: 15px;
+            padding: 12px 24px;
+            background: #00f0ff;
+            border: none;
+            color: #000;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            box-shadow: 0 0 10px #00f0ff;
+        }
+        #modal button:hover { background: #fff; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="hud">
+        <div class="p1-color">P1 (WASD | SPACE=Net): $<span id="p1-score">0</span></div>
+        <div>ROUND: <span id="round-num">1</span>/6 | TIME: <span id="timer">30</span>s</div>
+        <div>FISH: <span id="fish-count">0</span> | WHALES: <span id="whale-count">8</span></div>
+        <div class="p2-color">P2 (ARROWS | SHIFT=Net): $<span id="p2-score">0</span></div>
+    </div>
+    
+    <div id="event-banner">EVENT: None</div>
+    <canvas id="gameCanvas" width="1000" height="600"></canvas>
+
+    <div id="modal">
+        <h1 id="modal-title">ECO-FISHERIES: TRAGEDY OF THE COMMONS</h1>
+        <h3 id="modal-subtitle">ECOLOGICAL CAPITAL VS. SHORT-TERM YIELD</h3>
+        <div id="modal-content">
+            <p>Two rival fishing boats share a single oceanic ecosystem divided by a territorial line.</p>
+            <p><strong>P1 Controls:</strong> WASD to move | <strong>SPACEBAR</strong> to deploy Trawl Net ($150 fee).</p>
+            <p><strong>P2 Controls:</strong> ARROW KEYS to move | <strong>RIGHT SHIFT</strong> to deploy Trawl Net ($150 fee).</p>
+            <div class="paradox-box">
+                <strong>DYNAMIC REPRODUCTION MECHANIC:</strong> Whales reproduce biologically! Preserving whales allows stocks to multiply (+1 to +2 calves per round), generating higher dividend yields. Overharvesting early triggers population collapse, eliminating future offspring!
+            </div>
+        </div>
+        <button id="modal-btn" onclick="nextRound()">START GAME</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game State Variables
+let round = 0;
+let timeLeft = 30;
+let timerInterval = null;
+let isPaused = true;
+let currentEvent = null;
+
+let p1Score = 0;
+let p2Score = 0;
+
+// Catch & Technology Tracking
+let p1FishCaught = 0;
+let p2FishCaught = 0;
+let p1WhalesCaught = 0;
+let p2WhalesCaught = 0;
+let p1NetsUsed = 0;
+let p2NetsUsed = 0;
+
+// Economic & Carrying Capacity Mechanics
+let baseMaxFish = 25;
+let fishMultiplier = 1.0;
+let oceanDegraded = false;
+let whaleCalvesBornMessage = "";
+
+let floatingTexts = [];
+
+// Hooks & Net Mechanics
+const hook1 = { x: 250, y: 150, radius: 10, speed: 6, owner: 1, netActive: false, netTimer: 0 };
+const hook2 = { x: 750, y: 150, radius: 10, speed: 6, owner: 2, netActive: false, netTimer: 0 };
+
+// Inputs
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+
+    if (e.code === 'Space' && !isPaused && !hook1.netActive) {
+        if (p1Score >= 150) {
+            deployNet(hook1);
+        } else {
+            floatingTexts.push({ text: `INSUFFICIENT CAPITAL`, x: hook1.x, y: hook1.y - 15, color: '#ff3366', alpha: 1.0 });
+        }
+    }
+    if ((e.code === 'ShiftRight' || e.code === 'Numpad0') && !isPaused && !hook2.netActive) {
+        if (p2Score >= 150) {
+            deployNet(hook2);
+        } else {
+            floatingTexts.push({ text: `INSUFFICIENT CAPITAL`, x: hook2.x, y: hook2.y - 15, color: '#ff3366', alpha: 1.0 });
+        }
+    }
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+function deployNet(hook) {
+    hook.netActive = true;
+    hook.netTimer = 45;
+    if (hook.owner === 1) {
+        p1Score -= 150;
+        p1NetsUsed++;
+    } else {
+        p2Score -= 150;
+        p2NetsUsed++;
+    }
+    floatingTexts.push({
+        text: `-$150 NET CAPITAL FEE`,
+        x: hook.x,
+        y: hook.y - 15,
+        color: '#ffcc00',
+        alpha: 1.0
+    });
+}
+
+// Species Definitions
+const SPECIES = {
+    COD: { name: 'Cod', value: 10, speed: 1.5, radius: 12, color: '#a8a8a8' },
+    SALMON: { name: 'Salmon', value: 25, speed: 2.5, radius: 14, color: '#ff7f50' },
+    SWORDFISH: { name: 'Swordfish', value: 50, speed: 4.0, radius: 18, color: '#c0c0c0' },
+    TUNA: { name: 'Bluefin Tuna', value: 100, speed: 5.0, radius: 16, color: '#4169e1' },
+    WHALE: { name: 'Whale', value: 5000, speed: 0.8, radius: 38, color: '#483d8b' }
+};
+
+let fishes = [];
+
+const seaweeds = Array.from({ length: 15 }, (_, i) => ({
+    x: i * 70 + 20,
+    height: 60 + Math.random() * 40,
+    offset: Math.random() * 100
+}));
+
+function initFishes() {
+    fishes = [];
+    for (let i = 0; i < baseMaxFish; i++) {
+        spawnFish();
+    }
+    // Initial Population: 8 Whales
+    for (let i = 0; i < 8; i++) {
+        spawnWhale();
+    }
+}
+
+function spawnWhale() {
+    fishes.push({
+        type: SPECIES.WHALE,
+        x: Math.random() * canvas.width,
+        y: 180 + Math.random() * 320,
+        dx: (Math.random() < 0.5 ? 1 : -1) * SPECIES.WHALE.speed,
+        dy: (Math.random() - 0.5) * 0.5,
+        radius: SPECIES.WHALE.radius,
+        value: SPECIES.WHALE.value,
+        isWhale: true
+    });
+}
+
+function spawnFish(forcedType = null) {
+    let type = forcedType;
+    if (!type) {
+        const rand = Math.random();
+        if (rand < 0.45) type = SPECIES.COD;
+        else if (rand < 0.75) type = SPECIES.SALMON;
+        else if (rand < 0.92) type = SPECIES.SWORDFISH;
+        else type = SPECIES.TUNA;
+    }
+    fishes.push({
+        type: type,
+        x: Math.random() * canvas.width,
+        y: 120 + Math.random() * 420,
+        dx: (Math.random() < 0.5 ? 1 : -1) * type.speed,
+        dy: (Math.random() - 0.5) * 0.8,
+        radius: type.radius,
+        value: type.value,
+        isWhale: false
+    });
+}
+
+function triggerRandomEvent() {
+    fishes.forEach(f => {
+        if (!f.isWhale) f.dx = (f.dx > 0 ? 1 : -1) * f.type.speed;
+    });
+
+    const events = ['Migration', 'Storm', 'Market Surge', 'Parasite'];
+    currentEvent = events[Math.floor(Math.random() * events.length)];
+    const banner = document.getElementById('event-banner');
+    banner.style.display = 'block';
+
+    if (currentEvent === 'Migration') {
+        banner.innerText = 'EVENT: Salmon Migration! (High Salmon Spawns)';
+        for (let i = 0; i < 5; i++) spawnFish(SPECIES.SALMON);
+    } else if (currentEvent === 'Storm') {
+        banner.innerText = 'EVENT: Ocean Storm! (Fish Move 50% Faster)';
+        fishes.forEach(f => f.dx *= 1.5);
+    } else if (currentEvent === 'Market Surge') {
+        banner.innerText = 'EVENT: Market Surge! (Swordfish Value Doubled)';
+    } else if (currentEvent === 'Parasite') {
+        banner.innerText = 'EVENT: Parasite Outbreak! (Cod Worth $0)';
+    }
+}
+
+function update() {
+    if (isPaused) return;
+
+    // P1 WASD
+    if (keys['KeyW'] && hook1.y > 80) hook1.y -= hook1.speed;
+    if (keys['KeyS'] && hook1.y < canvas.height - 20) hook1.y += hook1.speed;
+    if (keys['KeyA'] && hook1.x > 20) hook1.x -= hook1.speed;
+    if (keys['KeyD'] && hook1.x < canvas.width / 2 - 10) hook1.x += hook1.speed;
+
+    // P2 Arrows
+    if (keys['ArrowUp'] && hook2.y > 80) hook2.y -= hook2.speed;
+    if (keys['ArrowDown'] && hook2.y < canvas.height - 20) hook2.y += hook2.speed;
+    if (keys['ArrowLeft'] && hook2.x > canvas.width / 2 + 10) hook2.x -= hook2.speed;
+    if (keys['ArrowRight'] && hook2.x < canvas.width - 20) hook2.x += hook2.speed;
+
+    [hook1, hook2].forEach(h => {
+        if (h.netActive) {
+            h.netTimer--;
+            if (h.netTimer <= 0) h.netActive = false;
+        }
+    });
+
+    for (let index = fishes.length - 1; index >= 0; index--) {
+        const fish = fishes[index];
+        if (!fish) continue;
+
+        fish.x += fish.dx;
+        fish.y += fish.dy;
+
+        if (fish.x - fish.radius < 0 || fish.x + fish.radius > canvas.width) fish.dx *= -1;
+        if (fish.y - fish.radius < 100 || fish.y + fish.radius > canvas.height - 20) fish.dy *= -1;
+
+        [hook1, hook2].forEach(hook => {
+            const dist = Math.hypot(hook.x - fish.x, hook.y - fish.y);
+            const effectiveRadius = hook.netActive ? 110 : hook.radius;
+            if (dist < effectiveRadius + fish.radius) {
+                catchFish(fish, index, hook.owner, hook.netActive);
+            }
+        });
+    }
+
+    if (fishes.filter(f => !f.isWhale).length < Math.floor(baseMaxFish * 0.6)) {
+        spawnFish();
+    }
+
+    const normalFish = fishes.filter(f => !f.isWhale).length;
+    if (normalFish < Math.floor(baseMaxFish * 0.35) && !oceanDegraded) {
+        oceanDegraded = true;
+        fishMultiplier = 0.7;
+    }
+
+    floatingTexts.forEach((ft, i) => {
+        ft.y -= 1;
+        ft.alpha -= 0.02;
+        if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+    });
+
+    document.getElementById('p1-score').innerText = Math.round(p1Score);
+    document.getElementById('p2-score').innerText = Math.round(p2Score);
+    document.getElementById('fish-count').innerText = fishes.filter(f => !f.isWhale).length;
+    document.getElementById('whale-count').innerText = fishes.filter(f => f.isWhale).length;
+}
+
+function catchFish(fish, index, playerNum, isNetCatch) {
+    let earned = fish.value * fishMultiplier;
+
+    if (currentEvent === 'Market Surge' && fish.type === SPECIES.SWORDFISH) earned *= 2;
+    if (currentEvent === 'Parasite' && fish.type === SPECIES.COD) earned = 0;
+    if (round === 2) earned *= 1.5;
+    if (round === 5 && !fish.isWhale) earned *= 2;
+    if (round === 5 && fish.isWhale) earned = 2500;
+
+    if (playerNum === 1) {
+        p1Score += earned;
+        if (fish.isWhale) p1WhalesCaught++;
+        else p1FishCaught++;
+    } else {
+        p2Score += earned;
+        if (fish.isWhale) p2WhalesCaught++;
+        else p2FishCaught++;
+    }
+
+    floatingTexts.push({
+        text: `+$${Math.round(earned)}${isNetCatch ? ' (NET)' : ''}`,
+        x: fish.x,
+        y: fish.y,
+        color: playerNum === 1 ? '#ff3366' : '#33ccff',
+        alpha: 1.0
+    });
+
+    fishes.splice(index, 1);
+}
+
+function drawCreature(f) {
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    const facingRight = f.dx > 0;
+    if (!facingRight) ctx.scale(-1, 1);
+
+    const color = f.type.color;
+
+    if (f.isWhale) {
+        ctx.fillStyle = '#3a3a5c';
+        ctx.beginPath(); ctx.ellipse(0, 0, 38, 22, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#8a8aa8';
+        ctx.beginPath(); ctx.ellipse(5, 8, 25, 10, 0, 0, Math.PI); ctx.fill();
+        ctx.fillStyle = '#3a3a5c';
+        ctx.beginPath(); ctx.moveTo(-35, 0); ctx.lineTo(-52, -16); ctx.lineTo(-45, 0); ctx.lineTo(-52, 16); ctx.closePath(); ctx.fill();
+
+        if (Math.random() < 0.3) {
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.6)';
+            ctx.fillRect(10, -28, 4, 10); ctx.fillRect(6, -34, 4, 6); ctx.fillRect(14, -34, 4, 6);
+        }
+
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(22, -4, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(23, -4, 2, 0, Math.PI * 2); ctx.fill();
+
+    } else if (f.type === SPECIES.SWORDFISH) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.ellipse(0, 0, 18, 9, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(34, -1); ctx.lineTo(15, 3); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(-26, -10); ctx.lineTo(-20, 0); ctx.lineTo(-26, 10); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(10, -2, 2, 0, Math.PI * 2); ctx.fill();
+
+    } else {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.ellipse(0, 0, f.radius, f.radius * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-f.radius + 2, 0); ctx.lineTo(-f.radius - 8, -f.radius * 0.6); ctx.lineTo(-f.radius - 4, 0); ctx.lineTo(-f.radius - 8, f.radius * 0.6); ctx.closePath(); ctx.fill();
+
+        if (f.type === SPECIES.TUNA) {
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(-4, -6); ctx.lineTo(-2, 6); ctx.moveTo(2, -6); ctx.lineTo(4, 6); ctx.stroke();
+        }
+
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(f.radius * 0.5, -2, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(f.radius * 0.5 + 0.5, -2, 1.2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#081b33';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#115533';
+    seaweeds.forEach(s => {
+        ctx.beginPath();
+        ctx.moveTo(s.x, canvas.height);
+        ctx.quadraticCurveTo(s.x + Math.sin(Date.now() * 0.002 + s.offset) * 15, canvas.height - s.height / 2, s.x, canvas.height - s.height);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#115533';
+        ctx.stroke();
+    });
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.setLineDash([10, 10]);
+    ctx.beginPath(); ctx.moveTo(canvas.width / 2, 0); ctx.lineTo(canvas.width / 2, canvas.height); ctx.stroke();
+    ctx.setLineDash([]);
+
+    [hook1, hook2].forEach(h => {
+        if (h.netActive) {
+            ctx.strokeStyle = 'rgba(255, 204, 0, 0.6)';
+            ctx.fillStyle = 'rgba(255, 204, 0, 0.15)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 6]);
+            ctx.beginPath();
+            ctx.arc(h.x, h.y, 110, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(h.x, 0); ctx.lineTo(h.x, h.y); ctx.stroke();
+
+        ctx.strokeStyle = h.owner === 1 ? '#ff3366' : '#33ccff';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(h.x - 4, h.y, 6, 0, Math.PI); ctx.stroke();
+    });
+
+    fishes.forEach(f => drawCreature(f));
+
+    floatingTexts.forEach(ft => {
+        ctx.fillStyle = ft.color;
+        ctx.globalAlpha = ft.alpha;
+        ctx.font = 'bold 15px Courier New';
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.globalAlpha = 1.0;
+    });
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function startRoundTimer() {
+    timeLeft = 30;
+    document.getElementById('timer').innerText = timeLeft;
+    clearInterval(timerInterval);
+
+    timerInterval = setInterval(() => {
+        if (!isPaused) {
+            timeLeft--;
+            document.getElementById('timer').innerText = timeLeft;
+            if (timeLeft <= 0) {
+                endRound();
+            }
+        }
+    }, 1000);
+}
+
+function getContextualTag() {
+    if (round === 2 && oceanDegraded) return "AH SHIT, THE DEPLETION PARADOX!";
+    if (round === 5) return "PANIC TIME: GREEN PARADOX EXTRACTION!";
+    if (oceanDegraded) return "CLASSIC TRAGEDY OF THE COMMONS!";
+    if (round === 6) return "POLICY DAY OF RECKONING!";
+    return "MARKET YIELD SHIFT!";
+}
+
+function endRound() {
+    isPaused = true;
+    clearInterval(timerInterval);
+
+    if (oceanDegraded) {
+        baseMaxFish = Math.max(10, baseMaxFish - 5);
+    }
+
+    const livingWhales = fishes.filter(f => f.isWhale);
+    const totalLivingWhales = livingWhales.length;
+
+    let p1LivingWhales = 0;
+    let p2LivingWhales = 0;
+
+    livingWhales.forEach(w => {
+        if (w.x < canvas.width / 2) p1LivingWhales++;
+        else p2LivingWhales++;
+    });
+
+    // Dividend per whale ($250 per whale conserved in territory)
+    let p1Div = p1LivingWhales * 250;
+    let p2Div = p2LivingWhales * 250;
+
+    // Handle Natural Whale Reproduction (Compounding Stock Growth)
+    whaleCalvesBornMessage = "";
+    if (round < 6) {
+        if (totalLivingWhales >= 5 && totalLivingWhales < 12) {
+            spawnWhale();
+            spawnWhale();
+            whaleCalvesBornMessage = "<p style='color:#00ff66; font-size:12px;'><strong>BIOLOGICAL GROWTH:</strong> Conserved stock generated +2 Whale Calves for the next round!</p>";
+        } else if (totalLivingWhales >= 2 && totalLivingWhales < 12) {
+            spawnWhale();
+            whaleCalvesBornMessage = "<p style='color:#00ff66; font-size:12px;'><strong>BIOLOGICAL GROWTH:</strong> Conserved stock generated +1 Whale Calf for the next round!</p>";
+        } else if (totalLivingWhales < 2) {
+            whaleCalvesBornMessage = "<p style='color:#ff3366; font-size:12px;'><strong>POPULATION COLLAPSE:</strong> < 2 Whales survived. Stock cannot reproduce biologically!</p>";
+        }
+    }
+
+    let extraNote = "";
+    if (round === 6) {
+        if (totalLivingWhales > 4) {
+            p1Div *= 2; p2Div *= 2;
+            extraNote = "<br><strong style='color:#00ff66;'>Conservation Bonus: Whale Dividends Doubled!</strong>";
+        } else {
+            p1Score -= 1500; p2Score -= 1500;
+            extraNote = "<br><strong style='color:#ff3366;'>Gov Fine: -$1,500 penalty for depleting Whales below 5!</strong>";
+        }
+    }
+
+    p1Score += p1Div;
+    p2Score += p2Div;
+
+    const modal = document.getElementById('modal');
+    const title = document.getElementById('modal-title');
+    const subtitle = document.getElementById('modal-subtitle');
+    const content = document.getElementById('modal-content');
+    const btn = document.getElementById('modal-btn');
+
+    title.innerText = `ROUND ${round} SUMMARY`;
+    subtitle.innerText = `OCEAN CARRYING CAPACITY: ${baseMaxFish} FISH MAX | SURVIVING WHALES: ${totalLivingWhales}`;
+    
+    const reactionText = getContextualTag();
+
+    if (round >= 6) {
+        const maxPotentialCombined = 65000; 
+        const totalRealized = Math.max(0, p1Score + p2Score);
+        const p1Efficiency = Math.min(100, Math.round((p1Score / (maxPotentialCombined / 2)) * 100));
+        const p2Efficiency = Math.min(100, Math.round((p2Score / (maxPotentialCombined / 2)) * 100));
+        const totalEfficiency = Math.min(100, Math.round((totalRealized / maxPotentialCombined) * 100));
+
+        title.innerText = "GAME OVER - ECONOMIC AUDIT";
+        subtitle.innerText = "INDUSTRIAL EXTRACTION & PARADOX EVALUATION";
+        const winner = p1Score > p2Score ? "PLAYER 1 WINS!" : p2Score > p1Score ? "PLAYER 2 WINS!" : "IT'S A TIE!";
+
+        content.innerHTML = `
+            <div class="reaction-tag">${reactionText}</div>
+            <h2 style="color:#ffcc00; margin:10px 0;">${winner}</h2>
+            <div class="stats-grid">
+                <div style="color:#ff3366;">
+                    <strong>P1 REALIZED:</strong> $${Math.round(p1Score)}<br>
+                    Potential Realized: ${p1Efficiency}%<br>
+                    Nets Deployed: ${p1NetsUsed}<br>
+                    Whales Harvested: ${p1WhalesCaught}
+                </div>
+                <div style="color:#33ccff;">
+                    <strong>P2 REALIZED:</strong> $${Math.round(p2Score)}<br>
+                    Potential Realized: ${p2Efficiency}%<br>
+                    Nets Deployed: ${p2NetsUsed}<br>
+                    Whales Harvested: ${p2WhalesCaught}
+                </div>
+            </div>
+            <div class="audit-box">
+                <strong>OVERFISHING & TECHNOLOGY AUDIT:</strong><br>
+                Combined Yield Realized: <strong>$${Math.round(totalRealized)}</strong> / $${maxPotentialCombined} Max Potential (${totalEfficiency}% Efficiency).<br><br>
+                <em>Lesson: Trawl nets reduced marginal effort costs, but accelerated stock depletion. Overharvesting early crushed biological whale reproduction, liquidating compounding capital for short-term cash!</em>
+            </div>
+        `;
+        btn.innerText = "RESTART GAME";
+        btn.onclick = () => location.reload();
+    } else {
+        content.innerHTML = `
+            <div class="reaction-tag">${reactionText}</div>
+            <div class="stats-grid">
+                <div style="color:#ff3366;">
+                    <strong>P1 CATCH STATS:</strong><br>
+                    Standard Fish: ${p1FishCaught} | Nets Used: ${p1NetsUsed}<br>
+                    Whales Harvested: ${p1WhalesCaught}<br>
+                    Living Whales in Zone: ${p1LivingWhales} (+$${p1Div} Yield)
+                </div>
+                <div style="color:#33ccff;">
+                    <strong>P2 CATCH STATS:</strong><br>
+                    Standard Fish: ${p2FishCaught} | Nets Used: ${p2NetsUsed}<br>
+                    Whales Harvested: ${p2WhalesCaught}<br>
+                    Living Whales in Zone: ${p2LivingWhales} (+$${p2Div} Yield)
+                </div>
+            </div>
+            ${whaleCalvesBornMessage}
+            ${extraNote}
+            <br>
+            <p><strong>Current Standings:</strong> P1: $${Math.round(p1Score)} | P2: $${Math.round(p2Score)}</p>
+            <p><em>Ocean Status: ${oceanDegraded ? '<span style="color:#ff3366;">DEGRADED (-30% Price Penalty & Lower Carrying Capacity)</span>' : '<span style="color:#00ff66;">HEALTHY</span>'}</em></p>
+        `;
+        btn.innerText = `START ROUND ${round + 1}`;
+        btn.onclick = nextRound;
+    }
+
+    modal.style.display = 'flex';
+}
+
+function nextRound() {
+    round++;
+    document.getElementById('round-num').innerText = round;
+    document.getElementById('modal').style.display = 'none';
+
+    const subtitle = document.getElementById('modal-subtitle');
+    const content = document.getElementById('modal-content');
+
+    if (round === 1) {
+        initFishes();
+    } else if (round === 2) {
+        subtitle.innerText = "ROUND 2: DEMAND SURGE & THE DEPLETION PARADOX";
+        content.innerHTML = `
+            <p><strong>Market Shift:</strong> Fish prices increased by 1.5x due to high consumer demand!</p>
+            <div class="paradox-box">
+                <strong>THE DEPLETION PARADOX:</strong> High current prices tempt players to deploy trawl nets aggressively. However, overharvesting whales now destroys their biological reproduction and future dividend yield!
+            </div>
+        `;
+    } else if (round === 3) {
+        subtitle.innerText = "ROUND 3: SCARCITY & CARRYING CAPACITY";
+        content.innerHTML = `
+            <p><strong>Ocean Status:</strong> Max fish carrying capacity is now capped at ${baseMaxFish}.</p>
+            <div class="paradox-box">
+                <strong>TRAGEDY OF THE COMMONS:</strong> Because neither player owns the fish stock, high-yield net extractions reduce total yield available to both players in this round.
+            </div>
+        `;
+    } else if (round === 4) {
+        subtitle.innerText = "ROUND 4: ECOLOGICAL EXTERNALITIES";
+        content.innerHTML = `
+            <p><strong>Environmental Check:</strong> ${oceanDegraded ? 'Market prices penalized due to overfishing.' : 'Ocean stocks remain stable.'}</p>
+            <div class="paradox-box">
+                <strong>NEGATIVE EXTERNALITIES:</strong> Unchecked industrial harvesting imposes costs on both players through degraded stock quality and lower revenue per catch.
+            </div>
+        `;
+    } else if (round === 5) {
+        subtitle.innerText = "ROUND 5: MARKET BOOM & TRAGEDY OF THE COMMODITY";
+        content.innerHTML = `
+            <p><strong>Market Shift:</strong> Standard fish values double! Whale harvest prices drop to $2,500.</p>
+            <div class="paradox-box">
+                <strong>THE GREEN PARADOX & TRAGEDY OF COMMODITY:</strong> Technological substitutes and demand booms accelerate short-term extractions right before Round 6 regulations take effect.
+            </div>
+        `;
+    } else if (round === 6) {
+        subtitle.innerText = "ROUND 6: POLICY ENFORCEMENT & STEWARDSHIP";
+        content.innerHTML = `
+            <p><strong>Government Policy Active:</strong> If >4 Whales survive, dividends double! If <=4 Whales survive, both players face a $1,500 fine.</p>
+            <div class="paradox-box">
+                <strong>PROPERTY RIGHTS & STEWARDSHIP:</strong> Demonstrates how institutional rewards and regulatory penalties align private incentives with long-term ecological conservation.
+            </div>
+        `;
+    }
+
+    triggerRandomEvent();
+    isPaused = false;
+    startRoundTimer();
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
